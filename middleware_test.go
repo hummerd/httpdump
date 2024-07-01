@@ -30,7 +30,7 @@ func TestMiddleware_FilterByPath(t *testing.T) {
 		nil,
 		nil,
 		[]httpdump.Option{
-			httpdump.WithExcludeByPathFilter(regexp.MustCompile("somepath")),
+			httpdump.WithPathFilter(regexp.MustCompile("somepath")),
 		})
 
 	expectedResultDumped := &httpDumpResult{

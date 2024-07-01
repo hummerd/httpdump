@@ -66,10 +66,10 @@ func FilterResponseBodyByContentType(contentTypes []string) ResponseFilterFunc {
 	}
 }
 
-// WithExcludeByPathFilter creates a new option that excludes request and response by path.
-func WithExcludeByPathFilter(regexps ...*regexp.Regexp) Option {
-	req := WithExcludeRequestByPathFilter(regexps...)
-	res := WithExcludeResponseByPathFilter(regexps...)
+// WithPathFilter creates a new option that excludes request and response by path.
+func WithPathFilter(regexps ...*regexp.Regexp) Option {
+	req := WithRequestPathFilter(regexps...)
+	res := WithResponsePathFilter(regexps...)
 
 	return func(m *Middleware) {
 		req(m)
@@ -88,8 +88,8 @@ func WithRequestFilters(filters ...RequestFilterFunc) Option {
 	}
 }
 
-// WithExcludeRequestByPathFilter creates a new option that excludes request by path.
-func WithExcludeRequestByPathFilter(regexps ...*regexp.Regexp) Option {
+// WithRequestPathFilter creates a new option that excludes request by path.
+func WithRequestPathFilter(regexps ...*regexp.Regexp) Option {
 	f := func(r *http.Request) (bool, bool) {
 		for _, re := range regexps {
 			if re.MatchString(r.URL.Path) {
@@ -112,8 +112,8 @@ func WithResponseFilters(filters ...ResponseFilterFunc) Option {
 	}
 }
 
-// WithExcludeResponseByPathFilter creates a new option that excludes response by path.
-func WithExcludeResponseByPathFilter(regexps ...*regexp.Regexp) Option {
+// WithResponsePathFilter creates a new option that excludes response by path.
+func WithResponsePathFilter(regexps ...*regexp.Regexp) Option {
 	f := func(r *http.Request, headers http.Header, status int) (bool, bool) {
 		for _, re := range regexps {
 			if re.MatchString(r.URL.Path) {
@@ -131,6 +131,10 @@ func WithExcludeResponseByPathFilter(regexps ...*regexp.Regexp) Option {
 
 // WithLimitedBody creates a new option that sets limit for dumped body size.
 func WithLimitedBody(limit int) Option {
+	if limit <= 0 {
+		panic("httpdump: limit must be greater than 0")
+	}
+
 	return func(m *Middleware) {
 		m.dumpedBodySize = limit
 	}
@@ -184,8 +188,17 @@ func NewMiddleware(
 		opt(m)
 	}
 
-	m.writerPool = &sync.Pool{New: func() interface{} { return newCachedWriter(nil, m.dumpedBodySize) }}
-	m.readerPool = &sync.Pool{New: func() interface{} { r, _ := io.NewPrefixReader(nil, m.dumpedBodySize); return r }}
+	m.writerPool = &sync.Pool{
+		New: func() any {
+			return newCachedWriter(nil, m.dumpedBodySize)
+		},
+	}
+	m.readerPool = &sync.Pool{
+		New: func() any {
+			r, _ := io.NewPrefixReader(nil, m.dumpedBodySize)
+			return r
+		},
+	}
 
 	return m
 }

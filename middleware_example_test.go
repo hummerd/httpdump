@@ -1,10 +1,16 @@
-# httpdump
+package httpdump_test
 
-HTTP dump middleware allows you to record and analyse HTTP server requests and responses. Most common use for this middleware is to log request and responses for debugging purposes. Also can be used for tracing or collecting metrics.
+import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"time"
 
-## Example
+	"github.com/hummerd/httpdump"
+)
 
-``` go
 func Example() {
 	setupDefaultLogger()
 
@@ -42,4 +48,34 @@ func Example() {
 	// time=now level=DEBUG msg="HTTP request" method=GET url=/call_me headers="map[Accept-Encoding:[gzip] User-Agent:[Go-http-client/1.1]]" body=""
 	// time=now level=DEBUG msg="HTTP response" method=GET url=/call_me status=405 headers="map[Allow:[POST] Content-Type:[text/plain; charset=utf-8] X-Content-Type-Options:[nosniff]]" body="Method Not Allowed\n" duration=1s
 }
-```
+
+func setupDefaultLogger() {
+	logh := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// to male log output stable, replace time and duration attributes
+			switch a.Key {
+			case slog.TimeKey:
+				return slog.Attr{Key: a.Key, Value: slog.StringValue("now")}
+			case "duration":
+				return slog.Attr{Key: a.Key, Value: slog.StringValue("1s")}
+			default:
+				return a
+			}
+		},
+	})
+
+	slog.SetDefault(slog.New(logh))
+}
+
+func setupHTTPServer(m *httpdump.Middleware) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.Handle("POST /call_me", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("this is response body"))
+	}))
+
+	h := m.Wrap(mux)
+
+	return httptest.NewServer(h)
+}
